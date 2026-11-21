@@ -1,0 +1,11 @@
+# Configuración con credenciales (nunca se sube)
+.env
+.env.*
+!.env.example
+
+# Dependencias de Composer (se reinstalan con "composer install" en app/librerias)
+app/librerias/vendor/
+
+# Archivos generados por la aplicación (boletas de usuarios y correos de prueba)
+storage/boletas/
+storage/correos/
