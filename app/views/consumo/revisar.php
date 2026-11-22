@@ -3,6 +3,9 @@
 // Recibe del controlador: servicios, datos, errores, error, aviso, avisoEsAdvertencia, pendiente,
 // duplicada (la boleta ya estaba cargada) y sinDuplicado (ya se controló que no esté repetida).
 // La lista "Antes de guardar" la arma PHP; js/cargar.js solo la actualiza mientras se escribe.
+// Etapa 23: bloque "Vencimientos" (cuotas opcionales, hasta 2) y sus controles en "Antes de guardar".
+
+use app\servicios\Vencimientos;
 
 $paso = 2;
 $iconos = require APP_PATH . 'views/consumo/iconos.php';
@@ -53,7 +56,67 @@ if ($duplicada) {
 $chequeos['comprobante'] = $conPdf
     ? ['ok', ['ok' => 'Comprobante PDF adjunto'], '']
     : ['pendiente', ['pendiente' => 'Sin comprobante'], 'Carga a mano'];
-$marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·'];
+
+// Etapa 23: cuotas. Los importes se muestran en formato argentino, igual que el importe total.
+$cuotas = [];
+foreach ([1, 2] as $n) {
+    $fechaCuota = (string) ($datos['vencimiento_' . $n] ?? '');
+    $importeCuota = (string) ($datos['importe_cuota_' . $n] ?? '');
+    $cuotas[$n] = [
+        'fecha' => $fechaCuota,
+        'importe' => $importeCuota,
+        'importeCampo' => is_numeric($importeCuota) ? number_format((float) $importeCuota, 2, ',', '.') : $importeCuota,
+        'empezada' => trim($fechaCuota) !== '' || trim($importeCuota) !== '',
+        'errorFecha' => $errores['vencimiento_' . $n] ?? null,
+        'errorImporte' => $errores['importe_cuota_' . $n] ?? null,
+    ];
+}
+$empezadas = array_filter($cuotas, fn ($c) => $c['empezada']);
+$erroresCuotas = array_values(array_filter(
+    $errores,
+    fn ($campo) => str_starts_with($campo, 'vencimiento_') || str_starts_with($campo, 'importe_cuota_'),
+    ARRAY_FILTER_USE_KEY
+));
+
+if ($erroresCuotas !== []) {
+    $chequeos['vencimientos'] = ['error', ['error' => $erroresCuotas[0]], ''];
+} elseif ($empezadas === []) {
+    $chequeos['vencimientos'] = ['pendiente', ['pendiente' => 'Sin vencimientos'], 'Son opcionales'];
+} else {
+    $chequeos['vencimientos'] = ['ok', ['ok' => count($empezadas) === 1 ? 'Vencimiento válido' : 'Vencimientos válidos y en orden'], ''];
+}
+
+// Que las cuotas sumen el total es solo un aviso (amarillo): no impide guardar.
+$sumaCuotas = 0.0;
+$sumaCalculable = $empezadas !== [] && $erroresCuotas === [] && is_numeric($datos['importe']);
+foreach ($empezadas as $c) {
+    $sumaCalculable = $sumaCalculable && is_numeric($c['importe']);
+    $sumaCuotas += (float) $c['importe'];
+}
+if ($sumaCalculable && abs($sumaCuotas - (float) $datos['importe']) < 0.005) {
+    $chequeos['suma'] = ['ok', ['ok' => 'Las cuotas suman el importe total'], ''];
+} elseif ($sumaCalculable) {
+    $chequeos['suma'] = ['aviso', ['aviso' => 'Las cuotas suman ' . Formato::pesos($sumaCuotas) . ' y el total es ' . Formato::pesos((float) $datos['importe'])], 'Revisá los importes con la boleta. Si coinciden con el papel, podés guardar igual.'];
+} else {
+    $chequeos['suma'] = ['pendiente', ['pendiente' => 'Las cuotas suman el importe total'], ''];
+}
+$sumaVisible = $sumaCalculable;
+
+// Vista previa: la próxima cuota, como se va a ver en Mis boletas.
+$cuotasValidas = [];
+foreach ($cuotas as $n => $c) {
+    if ($c['empezada'] && $c['errorFecha'] === null && $fechaEsValida($c['fecha'])) {
+        $cuotasValidas[] = (object) ['numero_cuota' => $n, 'fecha_vencimiento' => $c['fecha']];
+    }
+}
+$proximaCuota = Vencimientos::proxima($cuotasValidas);
+
+// El comprobante queda último en la lista.
+$comprobante = $chequeos['comprobante'];
+unset($chequeos['comprobante']);
+$chequeos['comprobante'] = $comprobante;
+
+$marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·', 'aviso' => '!'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -83,7 +146,8 @@ $marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·'];
               data-hoy="<?= date('Y-m-d') ?>"
               data-duplicado="<?= $duplicada ? 'repetida' : ($sinDuplicado ? 'controlado' : 'pendiente') ?>"
               data-servicio-leido="<?= htmlspecialchars($idElegido) ?>"
-              data-fecha-leida="<?= htmlspecialchars($datos['fecha']) ?>">
+              data-fecha-leida="<?= htmlspecialchars($datos['fecha']) ?>"
+              data-umbral="<?= Vencimientos::UMBRAL_DIAS ?>">
             <input type="hidden" name="csrf" value="<?= Session::tokenCsrf() ?>">
             <?php if ($conPdf): ?>
                 <input type="hidden" name="comprobante" value="1">
@@ -154,6 +218,50 @@ $marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·'];
                             <p class="field-error"><?= htmlspecialchars($errores['fecha']) ?></p>
                         <?php endif; ?>
                     </div>
+
+                    <fieldset class="cuotas" data-cuotas>
+                        <legend>Vencimientos <span class="optional-tag">(opcional)</span></legend>
+                        <p class="field-hint">
+                            <?php if ($conPdf && $empezadas !== []): ?>
+                                Leídos de los talones de pago. Corregilos si no coinciden con la boleta.
+                            <?php elseif ($conPdf): ?>
+                                No pudimos leer los vencimientos de esta boleta. Si querés, copialos del talón de pago.
+                            <?php else: ?>
+                                Copialos del talón de pago. Si la boleta se paga en dos cuotas, completá las dos.
+                            <?php endif; ?>
+                        </p>
+                        <?php foreach ($cuotas as $n => $c): ?>
+                            <div class="cuota-row" data-cuota="<?= $n ?>">
+                                <span class="cuota-num">Cuota <?= $n ?></span>
+                                <div class="field-group">
+                                    <label for="vencimiento_<?= $n ?>">Vence el</label>
+                                    <input id="vencimiento_<?= $n ?>" name="vencimiento_<?= $n ?>" type="date" value="<?= htmlspecialchars($c['fecha']) ?>"<?= $c['errorFecha'] !== null ? ' class="is-invalid" aria-invalid="true"' : '' ?>>
+                                    <?php if ($c['errorFecha'] !== null): ?>
+                                        <p class="field-error"><?= htmlspecialchars($c['errorFecha']) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="field-group">
+                                    <label for="importe_cuota_<?= $n ?>">Importe</label>
+                                    <div class="input-affix<?= $c['errorImporte'] !== null ? ' is-invalid' : '' ?>">
+                                        <span class="input-affix-text" aria-hidden="true">$</span>
+                                        <input id="importe_cuota_<?= $n ?>" name="importe_cuota_<?= $n ?>" type="text" inputmode="decimal" autocomplete="off" value="<?= htmlspecialchars($c['importeCampo']) ?>"<?= $c['errorImporte'] !== null ? ' aria-invalid="true"' : '' ?>>
+                                    </div>
+                                    <?php if ($c['errorImporte'] !== null): ?>
+                                        <p class="field-error"><?= htmlspecialchars($c['errorImporte']) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($n === 2): ?>
+                                    <button class="icon-button cuota-quitar" type="button" data-quitar-cuota aria-label="Quitar la cuota 2" hidden>
+                                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                        <button class="btn btn-outline cuota-agregar" type="button" data-agregar-cuota hidden>
+                            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                            Agregar 2ª cuota
+                        </button>
+                    </fieldset>
                 </div>
             </section>
 
@@ -172,6 +280,7 @@ $marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·'];
                         <span class="bill-name">
                             <span class="bill-service" data-preview="servicio"><?= htmlspecialchars($nombreServicio) ?></span>
                             <span class="bill-date"><span data-preview="fecha"><?= $fechaTexto ?></span><?php if ($conPdf): ?><span class="bill-pdf">PDF</span><?php endif; ?></span>
+                            <span class="due-chip is-<?= $proximaCuota['estado'] ?? 'futuro' ?>" data-preview="vencimiento"<?= $proximaCuota === null ? ' hidden' : '' ?>><?= htmlspecialchars($proximaCuota['texto'] ?? '') ?></span>
                         </span>
                     </span>
                     <span class="bill-figure">
@@ -187,7 +296,7 @@ $marcas = ['ok' => '✓', 'error' => '!', 'pendiente' => '·'];
                 <h3 class="checklist-title">Antes de guardar</h3>
                 <ul class="checklist">
                     <?php foreach ($chequeos as $clave => [$estadoCheck, $textos, $nota]): ?>
-                        <li class="check is-<?= $estadoCheck ?>" data-check="<?= $clave ?>">
+                        <li class="check is-<?= $estadoCheck ?>" data-check="<?= $clave ?>"<?= $clave === 'suma' && !$sumaVisible ? ' hidden' : '' ?>>
                             <span class="check-mark" aria-hidden="true"><?= $marcas[$estadoCheck] ?></span>
                             <span class="check-body">
                                 <span class="check-text"><?= htmlspecialchars($textos[$estadoCheck] ?? '') ?></span>

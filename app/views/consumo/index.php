@@ -1,5 +1,6 @@
 <?php
 // Etapa 17: "Mis boletas". Recibe del controlador: servicios, servicio, anios, anio, sinBoletas, grupos y resumen.
+// Etapa 23: cada boleta trae 'vencimiento' (próxima cuota, o null si no tiene vencimientos cargados).
 
 use app\servicios\HistorialBoletas;
 
@@ -138,6 +139,10 @@ $idServicioActual = $servicio !== null ? (int) $servicio->id_servicio : null;
                                                     Boleta del <?= Formato::fecha($b['fecha']) ?>
                                                     <?php if ($b['tienePdf']): ?><span class="bill-pdf">PDF</span><?php endif; ?>
                                                 </span>
+                                                <?php if ($b['vencimiento'] !== null): ?>
+                                                    <?php $v = $b['vencimiento']; ?>
+                                                    <span class="due-chip is-<?= $v['estado'] ?>"><?= htmlspecialchars($v['texto']) ?><?= $v['cuotas'] > 1 && $v['estado'] !== 'pasado' ? ' · cuota ' . $v['cuota'] . ' de ' . $v['cuotas'] : '' ?></span>
+                                                <?php endif; ?>
                                             </span>
                                         </span>
                                         <span class="bill-figure">

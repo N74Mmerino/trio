@@ -30,7 +30,8 @@ class LectorBoletas
     /**
      * Devuelve los datos de la boleta o null si no se pudo leer / la empresa no se reconoce.
      *
-     * Resultado: ['empresa' => ..., 'servicio' => ..., 'cantidad' => ..., 'importe' => ..., 'fecha' => ...]
+     * Resultado: ['empresa' => ..., 'servicio' => ..., 'cantidad' => ..., 'importe' => ..., 'fecha' => ...,
+     *             'vencimientos' => [['fecha' => ..., 'importe' => ...], ...]]  (Etapa 23)
      */
     public static function leer(string $rutaPdf): ?array
     {

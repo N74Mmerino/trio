@@ -1,9 +1,11 @@
 <?php
 // Etapa 17: ficha de una boleta. Recibe del controlador: boleta, anterior, siguiente, costo, costoAnterior,
 // variacionCantidad, variacionImporte, variacionCosto, diferencia, grafico y posicionAnual.
+// Etapa 23: también vencimientos (cuotas de la boleta) y avisoVencimiento (cuota que vence pronto, o null).
 
 use app\servicios\HistorialBoletas;
 use app\servicios\Indicadores;
+use app\servicios\Vencimientos;
 
 $iconos = require APP_PATH . 'views/consumo/iconos.php';
 $idServicio = (int) $boleta->id_servicio;
@@ -57,6 +59,12 @@ $textoConfirmar = '¿Eliminar la boleta de ' . mb_strtolower($boleta->servicio) 
                         Boleta del <?= Formato::fecha($boleta->fecha) ?> ·
                         cargada <?= $boleta->archivo !== null ? 'desde PDF' : 'a mano' ?> el <?= Formato::fecha($boleta->fecha_carga) ?>
                     </p>
+                    <?php if ($avisoVencimiento !== null): ?>
+                        <p class="due-notice">
+                            <span class="due-chip is-proximo"><?= $avisoVencimiento['cuotas'] > 1 ? 'Cuota ' . $avisoVencimiento['cuota'] . ' · ' : '' ?><?= htmlspecialchars($avisoVencimiento['texto']) ?></span>
+                            <a href="#vencimientos-titulo">Ver vencimientos ↓</a>
+                        </p>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="bill-actions">
@@ -275,6 +283,30 @@ $textoConfirmar = '¿Eliminar la boleta de ' . mb_strtolower($boleta->servicio) 
                 <div><dt>Origen</dt><dd><?= $boleta->archivo !== null ? 'PDF' : 'Carga manual' ?></dd></div>
                 <div><dt>Cargada el</dt><dd><?= Formato::fecha($boleta->fecha_carga) ?></dd></div>
             </dl>
+        </section>
+
+        <section class="card" aria-labelledby="vencimientos-titulo">
+            <div class="section-head">
+                <h2 id="vencimientos-titulo">Vencimientos</h2>
+                <?php if ($vencimientos !== []): ?>
+                    <p class="card-subtitle"><?= count($vencimientos) === 1 ? 'Un solo pago' : count($vencimientos) . ' cuotas' ?> · total <?= Formato::pesos(array_sum(array_map(fn ($c) => (float) $c->importe, $vencimientos))) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php if ($vencimientos === []): ?>
+                <p class="card-subtitle due-empty">Esta boleta no tiene vencimientos cargados.</p>
+            <?php else: ?>
+                <ul class="due-list">
+                    <?php foreach ($vencimientos as $cuota): ?>
+                        <?php $estado = Vencimientos::estado($cuota->fecha_vencimiento); ?>
+                        <li>
+                            <span class="due-cuota"><?= count($vencimientos) > 1 ? 'Cuota ' . (int) $cuota->numero_cuota . ' de ' . count($vencimientos) : 'Pago único' ?></span>
+                            <span class="due-field"><span class="bill-label"><?= $estado['estado'] === 'pasado' ? 'Venció el' : 'Vence el' ?></span><strong><?= Formato::fecha($cuota->fecha_vencimiento) ?></strong></span>
+                            <span class="due-field"><span class="bill-label">Importe</span><strong><?= Formato::pesos((float) $cuota->importe) ?></strong></span>
+                            <span class="due-chip is-<?= $estado['estado'] ?>"><?= htmlspecialchars($estado['texto']) ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
         </section>
     </main>
 </body>

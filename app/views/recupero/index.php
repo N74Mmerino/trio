@@ -13,8 +13,11 @@
             <h1 id="recupero-title">Recuperar contraseña</h1>
             <p class="auth-intro">Escribí el correo de tu cuenta y te enviamos un enlace para crear una contraseña nueva.</p>
 
-            <?php if (!empty($mensaje)): ?>
-                <div class="alert alert-success" role="status"><?= htmlspecialchars($mensaje) ?></div>
+            <?php if (!empty($correoEnviado)): ?>
+                <div class="alert alert-success" role="status">
+                    Si <strong><?= htmlspecialchars($correoEnviado) ?></strong> está registrado, te enviamos un enlace para crear una contraseña nueva. Revisá tu bandeja de entrada (y la de spam). El enlace vence en <?= (int) $minutos ?> minutos.
+                </div>
+                <p class="auth-intro">¿El correo está mal escrito? Corregilo abajo y volvé a enviar.</p>
             <?php endif; ?>
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error" role="alert"><?= htmlspecialchars($error) ?></div>

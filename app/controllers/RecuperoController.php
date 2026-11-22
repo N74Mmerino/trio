@@ -23,9 +23,6 @@ class RecuperoController extends Controller
     private const MAX_PEDIDOS = 3;
     private const VENTANA_MINUTOS = 15;
 
-    /** Mismo texto exista o no la cuenta: así no se puede averiguar qué correos están registrados. */
-    private const MENSAJE_ENVIADO = 'Si el correo está registrado, te enviamos un enlace para crear una contraseña nueva. Revisá tu bandeja de entrada (y la de spam). El enlace vence en 60 minutos.';
-
     public function __construct()
     {
         if (Session::estaAutenticado()) {
@@ -53,14 +50,25 @@ class RecuperoController extends Controller
             } else {
                 $this->enviarEnlace($email);
 
-                Session::flash('exito', self::MENSAJE_ENVIADO);
+                // Se guarda el correo escrito para mostrarlo en la confirmación: así el usuario
+                // detecta un error de tipeo. La respuesta es la misma exista o no la cuenta,
+                // para que no se pueda averiguar qué correos están registrados.
+                Session::flash('correo_enviado', $email);
                 $this->redirigir('recupero');
             }
         }
 
+        $correoEnviado = Session::tomarFlash('correo_enviado');
+
+        // Después de enviar, el campo vuelve con el mismo correo para poder corregirlo.
+        if ($correoEnviado !== null && $email === '') {
+            $email = $correoEnviado;
+        }
+
         $this->render('recupero/index', [
             'titulo' => 'Recuperar contraseña',
-            'mensaje' => Session::tomarFlash('exito'),
+            'correoEnviado' => $correoEnviado,
+            'minutos' => self::MINUTOS_VIGENCIA,
             'email' => $email,
             'error' => $error,
             'errores' => $errores,

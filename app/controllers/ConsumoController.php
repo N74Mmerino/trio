@@ -4,16 +4,19 @@ namespace app\controllers;
 
 use Controller;
 use finfo;
+use DataBase;
 use PDOException;
 use RuntimeException;
 use Session;
 use Validador;
 use app\models\ConsumoModel;
 use app\models\ServicioModel;
+use app\models\VencimientoModel;
 use app\servicios\AlmacenBoletas;
 use app\servicios\HistorialBoletas;
 use app\servicios\Indicadores;
 use app\servicios\LectorBoletas;
+use app\servicios\Vencimientos;
 
 class ConsumoController extends Controller
 {
@@ -22,6 +25,8 @@ class ConsumoController extends Controller
     private const TAMANIO_MAXIMO = 2 * 1024 * 1024;
     /** Etapa 20: la vista de revisión lo compara para marcar la boleta repetida en "Antes de guardar". */
     private const MENSAJE_DUPLICADA = 'Ya cargaste una boleta de este servicio con esa fecha.';
+    /** Etapa 23: cantidad máxima de cuotas de una boleta (EPE y ASSA: 2; Litoral Gas: 1). */
+    private const CUOTAS = 2;
 
     public function __construct()
     {
@@ -46,6 +51,13 @@ class ConsumoController extends Controller
         // Se traen todas las boletas porque la variación de la primera de un año
         // se calcula contra la última del año anterior.
         $boletas = HistorialBoletas::conComparaciones(ConsumoModel::listarDelUsuario($idUsuario));
+
+        // Etapa 23: a cada boleta se le suma su próximo vencimiento (null si no tiene cuotas cargadas).
+        $cuotas = VencimientoModel::agrupadasDelUsuario($idUsuario);
+        foreach ($boletas as &$b) {
+            $b['vencimiento'] = Vencimientos::proxima($cuotas[$b['id']] ?? []);
+        }
+        unset($b);
         $anios = HistorialBoletas::anios($boletas);
         $anio = $this->anioElegido($anios);
         $servicio = $this->servicioElegido($servicios);
@@ -94,6 +106,8 @@ class ConsumoController extends Controller
         $costo = Indicadores::costoUnitario($importe, $cantidad);
         $costoAnterior = $anterior !== null ? Indicadores::costoUnitario((float) $anterior->importe, (float) $anterior->cantidad) : null;
 
+        $vencimientos = VencimientoModel::deConsumo((int) $boleta->id_consumo);
+
         $this->render('consumo/ver', [
             'titulo' => 'Boleta de ' . mb_strtolower($boleta->servicio) . ', ' . HistorialBoletas::mes($boleta->fecha),
             'seccion' => 'consumo',
@@ -111,6 +125,8 @@ class ConsumoController extends Controller
             'grafico' => $contexto['grafico'],
             'posicionAnual' => $contexto['posicionAnual'],
             'error' => Session::tomarFlash('error'), // Etapa 22: falló el borrado
+            'vencimientos' => $vencimientos, // Etapa 23
+            'avisoVencimiento' => Vencimientos::aviso($vencimientos),
         ]);
     }
 
@@ -167,7 +183,7 @@ class ConsumoController extends Controller
             $this->descartarPendiente();
 
             if ($this->parametro('modo') === 'manual') {
-                $this->mostrarRevision(['id_servicio' => '', 'cantidad' => '', 'importe' => '', 'fecha' => ''], [], null, null);
+                $this->mostrarRevision($this->datosVacios(), [], null, null);
                 return;
             }
 
@@ -182,6 +198,11 @@ class ConsumoController extends Controller
             'importe' => $this->normalizarNumero($this->campo('importe')),
             'fecha' => $this->campo('fecha'),
         ];
+        // Etapa 23: cuotas (opcionales). Campos vencimiento_N e importe_cuota_N.
+        for ($n = 1; $n <= self::CUOTAS; $n++) {
+            $datos['vencimiento_' . $n] = $this->campo('vencimiento_' . $n);
+            $datos['importe_cuota_' . $n] = $this->normalizarNumero($this->campo('importe_cuota_' . $n));
+        }
         $conComprobante = is_array($pendiente) && $this->campo('comprobante') === '1';
         $errores = [];
         $error = null;
@@ -256,7 +277,13 @@ class ConsumoController extends Controller
                     'cantidad' => $leida['cantidad'],
                     'importe' => $leida['importe'],
                     'fecha' => $leida['fecha'],
-                ];
+                ] + $this->datosVacios();
+
+                // Etapa 23: cuotas leídas de los talones (puede no haber ninguna).
+                foreach (array_slice($leida['vencimientos'] ?? [], 0, self::CUOTAS) as $i => $cuota) {
+                    $datos['vencimiento_' . ($i + 1)] = $cuota['fecha'];
+                    $datos['importe_cuota_' . ($i + 1)] = $cuota['importe'];
+                }
 
                 // Se valida ya mismo para marcar datos faltantes o una boleta que ya estaba cargada.
                 $errores = $this->validarConsumo($datos, $idUsuario)->errores();
@@ -349,9 +376,20 @@ class ConsumoController extends Controller
             $archivo = null;
         }
 
+        // Etapa 23: la boleta y sus cuotas se guardan juntas en una transacción.
+        // Si falla cualquiera de los INSERT, se deshace todo: no queda una boleta sin sus cuotas.
         try {
+            DataBase::iniciarTransaccion();
             $idConsumo = ConsumoModel::registrar($idUsuario, (int) $datos['id_servicio'], $datos['fecha'], $datos['cantidad'], $datos['importe'], $archivo);
+
+            foreach ($this->cuotasCompletas($datos) as $numero => $cuota) {
+                VencimientoModel::registrar($idConsumo, $numero, $cuota['fecha'], $cuota['importe']);
+            }
+
+            DataBase::confirmarTransaccion();
         } catch (PDOException $e) {
+            DataBase::revertirTransaccion();
+
             // Si el INSERT falla no dejamos el PDF huérfano en disco.
             if ($archivo !== null) {
                 AlmacenBoletas::eliminar($archivo, $idUsuario);
@@ -494,6 +532,87 @@ class ConsumoController extends Controller
             $validador->agregarError('fecha', self::MENSAJE_DUPLICADA);
         }
 
+        // Etapa 23: después del control de duplicados, para que un error en una cuota no lo saltee.
+        $this->validarVencimientos($validador, $datos);
+
         return $validador;
+    }
+
+    /**
+     * Etapa 23: las cuotas son opcionales, pero una cuota empezada tiene que estar completa.
+     *   - Fecha e importe van juntos (no se guarda uno solo).
+     *   - La cuota 2 necesita la cuota 1.
+     *   - El vencimiento no puede ser anterior a la fecha de la boleta.
+     *   - La cuota 2 vence después de la cuota 1.
+     * Que las cuotas sumen el importe total NO es un error (puede haber redondeos): la vista lo avisa.
+     */
+    private function validarVencimientos(Validador $validador, array $datos): void
+    {
+        $anterior = null;
+
+        for ($n = 1; $n <= self::CUOTAS; $n++) {
+            $fecha = 'vencimiento_' . $n;
+            $importe = 'importe_cuota_' . $n;
+
+            if (!$this->cuotaEmpezada($datos, $n)) {
+                continue;
+            }
+
+            if ($n > 1 && !$this->cuotaEmpezada($datos, $n - 1)) {
+                $validador->agregarError('vencimiento_' . ($n - 1), 'Completá primero la cuota ' . ($n - 1) . '.');
+            }
+
+            $validador
+                ->requerido($fecha, 'Ingresá la fecha de vencimiento de la cuota ' . $n . '.')
+                ->fecha($fecha, 'La fecha de vencimiento de la cuota ' . $n . ' no es válida.')
+                ->requerido($importe, 'Ingresá el importe de la cuota ' . $n . '.')
+                ->numero($importe, 'El importe de la cuota ' . $n . ' debe ser un número.')
+                ->rango($importe, 0, 9999999999.99, 'Ingresá un importe entre 0 y 9.999.999.999,99.');
+
+            if ($validador->tieneError($fecha)) {
+                continue;
+            }
+
+            if (!$validador->tieneError('fecha') && $datos['fecha'] !== '' && $datos[$fecha] < $datos['fecha']) {
+                $validador->agregarError($fecha, 'El vencimiento no puede ser anterior a la fecha de la boleta.');
+            } elseif ($anterior !== null && $datos[$fecha] <= $anterior) {
+                $validador->agregarError($fecha, 'La cuota ' . $n . ' tiene que vencer después de la cuota ' . ($n - 1) . '.');
+            }
+
+            $anterior = $datos[$fecha];
+        }
+    }
+
+    /** Etapa 23: la cuota tiene algo escrito (fecha o importe). */
+    private function cuotaEmpezada(array $datos, int $n): bool
+    {
+        return trim($datos['vencimiento_' . $n] ?? '') !== '' || trim($datos['importe_cuota_' . $n] ?? '') !== '';
+    }
+
+    /** Etapa 23: cuotas para guardar, [número => ['fecha' => ..., 'importe' => ...]]. Ya validadas. */
+    private function cuotasCompletas(array $datos): array
+    {
+        $cuotas = [];
+
+        for ($n = 1; $n <= self::CUOTAS; $n++) {
+            if ($this->cuotaEmpezada($datos, $n)) {
+                $cuotas[$n] = ['fecha' => $datos['vencimiento_' . $n], 'importe' => $datos['importe_cuota_' . $n]];
+            }
+        }
+
+        return $cuotas;
+    }
+
+    /** Formulario vacío del paso 2 (datos de la boleta y cuotas). */
+    private function datosVacios(): array
+    {
+        $datos = ['id_servicio' => '', 'cantidad' => '', 'importe' => '', 'fecha' => ''];
+
+        for ($n = 1; $n <= self::CUOTAS; $n++) {
+            $datos['vencimiento_' . $n] = '';
+            $datos['importe_cuota_' . $n] = '';
+        }
+
+        return $datos;
     }
 }

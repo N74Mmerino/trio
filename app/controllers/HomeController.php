@@ -9,6 +9,11 @@ class HomeController extends Controller
 {
     public function actionIndex(): void
     {
-        $this->redirigir(Session::estaAutenticado() ? Session::rutaInicio() : 'auth/login');
+        // Etapa 24: el usuario con sesión va a su inicio; el visitante ve el home público.
+        if (Session::estaAutenticado()) {
+            $this->redirigir(Session::rutaInicio());
+        }
+
+        $this->render('home/index', ['titulo' => 'Inicio']);
     }
 }

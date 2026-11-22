@@ -54,6 +54,23 @@ CREATE TABLE consumos (
   CONSTRAINT chk_consumos_importe  CHECK (importe >= 0)
 ) ENGINE=InnoDB;
 
+-- Etapa 23: vencimientos de cada boleta (una fila por cuota; se borran junto con la boleta).
+CREATE TABLE vencimientos (
+  id_vencimiento     INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+  id_consumo         INT UNSIGNED     NOT NULL,
+  numero_cuota       TINYINT UNSIGNED NOT NULL,
+  fecha_vencimiento  DATE             NOT NULL,
+  importe            DECIMAL(12,2)    NOT NULL,
+  pagado_en          DATE             NULL,
+  PRIMARY KEY (id_vencimiento),
+  UNIQUE KEY uq_vencimientos_consumo_cuota (id_consumo, numero_cuota),
+  KEY idx_vencimientos_fecha (fecha_vencimiento),
+  CONSTRAINT fk_vencimientos_consumos FOREIGN KEY (id_consumo)
+    REFERENCES consumos (id_consumo) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT chk_vencimientos_cuota   CHECK (numero_cuota BETWEEN 1 AND 2),
+  CONSTRAINT chk_vencimientos_importe CHECK (importe >= 0)
+) ENGINE=InnoDB;
+
 -- Etapa 16: enlaces de recupero de contraseña (solo se guarda el hash del enlace).
 CREATE TABLE recuperos_password (
   id_recupero   INT UNSIGNED NOT NULL AUTO_INCREMENT,

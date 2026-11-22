@@ -716,3 +716,144 @@ div.bill-row.preview-row:hover { background: var(--surface-alt); }
 .btn-danger-outline { color: var(--danger-ink); background: var(--surface); border: 1px solid var(--danger-border); }
 .btn-danger-outline:hover { background: var(--danger-soft); }
 .bill-actions-divider { align-self: center; width: 1px; height: 26px; margin: 0 4px; background: var(--border-strong); }
+
+/* ---------------------------------------------------------------
+   Etapa 23: vencimientos (cuotas de la boleta).
+   Estados (app/servicios/Vencimientos.php): futuro (gris), proximo (amarillo, 7 días o menos)
+   y pasado (gris tenue). Todavía no hay rojo "vencida": no se registra si una cuota se pagó.
+   --------------------------------------------------------------- */
+.due-chip { display: inline-flex; align-items: center; width: fit-content; padding: 1px 9px; border: 1px solid transparent; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.6; white-space: nowrap; }
+.due-chip[hidden] { display: none; }
+.due-chip.is-futuro { color: var(--text-body); background: var(--border-soft); }
+.due-chip.is-proximo { color: var(--accent-text); background: var(--primary-soft); border-color: var(--accent-border-soft); }
+.due-chip.is-pasado { color: var(--text-muted); background: transparent; border-color: var(--border-control); }
+.bill-name .due-chip { margin-top: 5px; }
+
+/* Ficha: aviso debajo de la fecha y sección "Vencimientos" */
+.due-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 0; font-size: 12px; }
+.due-notice .due-chip { font-size: 12px; }
+.due-notice a { color: var(--link); font-weight: 600; text-decoration: none; }
+.due-empty { margin: 0; }
+.due-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.due-list li { display: grid; grid-template-columns: 130px repeat(2, minmax(0, 190px)) minmax(0, 1fr); gap: 10px 18px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border-soft); }
+.due-list li:first-child { border-top: 0; }
+.due-cuota { font-size: 14px; font-weight: 600; }
+.due-field { display: flex; flex-direction: column; }
+.due-field strong { font-size: 15px; }
+
+/* Paso 2: bloque de cuotas */
+.cuotas { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 4px 0 0; padding: 12px 14px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-alt); }
+.cuotas legend { padding: 0 6px; color: var(--text-body); font-size: 13px; font-weight: 600; }
+.optional-tag { color: var(--text-muted); font-weight: 500; }
+.cuota-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 33px; gap: 10px; align-items: start; }
+.cuota-row[hidden] { display: none; }
+.cuota-num { padding-top: 32px; color: var(--text-body); font-size: 13px; font-weight: 600; }
+.cuota-quitar { margin-top: 28px; }
+.cuota-quitar[hidden], .cuota-agregar[hidden] { display: none; }
+.cuota-agregar { align-self: flex-start; min-height: 38px; padding: 8px 14px; border-style: dashed; }
+.check[hidden] { display: none; }
+.check.is-aviso .check-mark { color: var(--accent-text); background: var(--primary-soft); }
+
+@media (max-width: 640px) {
+  .cuota-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 33px; }
+  .cuota-num { grid-column: 1 / -1; padding-top: 0; }
+  .due-list li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+/* ==========================================================================
+   Etapa 24 — Home público (propuesta B "Trío editorial", escala ajustada)
+   Todas las clases empiezan con "home-" para no chocar con el resto de la app.
+   Los colores salen de las variables, así el modo oscuro funciona solo.
+   Las franjas de servicio usan colores fijos: se ven igual en los dos temas.
+   ========================================================================== */
+.home-page { --home-bg: #fffdf6; --home-cierre-bg: #20221f; --home-cierre-texto: #fffdf6; --home-cierre-suave: #c9cac3; --home-cierre-borde: #3a3c36; overflow-x: hidden; background: var(--home-bg); }
+[data-theme="dark"] .home-page { --home-bg: var(--background); --home-cierre-bg: #1d1f1b; --home-cierre-suave: #a9aba2; --home-cierre-borde: #30322c; }
+
+/* Encabezado */
+.home-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
+.home-brand { gap: 10px; color: var(--text); font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+.home-brand .brand-mark, .home-brand .brand-mark svg { width: 32px; height: 32px; }
+.home-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.home-nav .theme-toggle { width: 44px; height: 44px; border-radius: 999px; }
+
+/* Botones (redondeados, distintos de los .btn de la app a propósito) */
+.home-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 18px; border: 1.5px solid transparent; border-radius: 999px; font-size: 14px; font-weight: 600; text-decoration: none; transition: transform .2s ease, filter .2s ease; }
+.home-btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.home-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.home-btn-lg { min-height: 52px; padding: 15px 26px; font-size: 15px; }
+.home-btn-solid { color: var(--home-bg); background: var(--text); }
+.home-btn-outline { color: var(--text); border-color: var(--text); }
+.home-btn-luz { color: #3e3109; background: var(--luz); font-weight: 700; }
+.home-btn-claro { color: var(--home-cierre-texto); border-color: var(--home-cierre-texto); }
+
+/* Portada */
+.home-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 48px; max-width: 1200px; margin: 0 auto; padding: 48px 32px 80px; }
+.home-hero-texto { flex: 1 1 640px; min-width: 0; }
+.home-titulo { margin: 0 0 24px; font-size: clamp(44px, 6vw, 68px); font-weight: 800; line-height: 1; letter-spacing: -.05em; }
+.home-titulo span { display: block; }
+/* nowrap: "Entendé lo que pagás." no se parte en dos líneas (en celular sí puede, ver abajo). */
+.home-titulo-acento { color: var(--link); white-space: nowrap; }
+.home-bajada { max-width: 500px; margin: 0 0 30px; color: var(--text-neutral); font-size: 17px; line-height: 1.65; }
+.home-acciones { display: flex; flex-wrap: wrap; gap: 12px; }
+.home-hero-logo { display: flex; flex: 0 1 360px; justify-content: center; min-width: 0; }
+.home-hero-logo svg { width: 100%; max-width: 360px; height: auto; }
+
+/* Franjas por servicio */
+.home-servicios { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* El color ocupa todo el ancho; el texto va en .home-servicio-contenido, agrupado hacia el centro de la página. */
+.home-servicio-contenido { box-sizing: border-box; max-width: 400px; margin: 0 auto; padding: 48px 36px 52px; }
+.home-servicio-luz .home-servicio-contenido { margin-right: 0; margin-left: auto; }
+.home-servicio-gas .home-servicio-contenido { margin-right: auto; margin-left: 0; }
+.home-servicio-luz { color: #3e3109; background: var(--luz); }
+.home-servicio-agua { color: #0f3554; background: var(--agua); }
+.home-servicio-gas { color: #4a1e06; background: var(--gas); }
+.home-servicio-num { margin: 0 0 30px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.home-servicio-unidad { margin: 0 0 6px; font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -.05em; }
+.home-servicio-sub { margin: 0 0 22px; font-size: 14px; font-weight: 500; }
+.home-servicio-texto { margin: 0 0 20px; font-size: 15px; line-height: 1.6; }
+.home-servicio-empresa { margin: 0; padding-top: 16px; border-top: 1.5px solid currentColor; font-size: 13px; font-weight: 600; }
+
+/* Frase central */
+.home-manifiesto { max-width: 1200px; margin: 0 auto; padding: 88px 32px 72px; }
+.home-manifiesto p { max-width: 900px; margin: 0; font-size: clamp(28px, 3.2vw, 42px); font-weight: 700; line-height: 1.18; letter-spacing: -.04em; }
+.home-manifiesto span { color: var(--text-muted); }
+
+/* Pasos */
+.home-pasos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1200px; margin: 0 auto; padding: 0 32px 88px; }
+.home-paso { padding: 28px 32px 0 0; border-top: 1.5px solid var(--text); }
+.home-paso h2 { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.home-paso p { margin: 0; color: var(--text-neutral); font-size: 15px; line-height: 1.6; }
+.home-paso .home-paso-num { margin-bottom: 8px; font-size: 60px; font-weight: 800; line-height: 1; letter-spacing: -.05em; }
+/* ".home-paso p" pinta el texto en gris; con dos clases el número le gana sin usar !important. */
+.home-paso .home-paso-luz { color: var(--luz); }
+.home-paso .home-paso-agua { color: var(--agua); }
+.home-paso .home-paso-gas { color: var(--gas); }
+
+/* Cierre y pie */
+.home-cierre { color: var(--home-cierre-texto); background: var(--home-cierre-bg); }
+.home-cierre-cuerpo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 32px; max-width: 1200px; margin: 0 auto; padding: 72px 32px; }
+.home-cierre h2 { margin: 0 0 10px; font-size: clamp(30px, 3.2vw, 40px); font-weight: 800; line-height: 1.05; letter-spacing: -.045em; }
+.home-cierre-cuerpo p { margin: 0; color: var(--home-cierre-suave); font-size: 16px; }
+.home-puntos { display: flex; gap: 9px; margin-bottom: 22px; }
+.home-puntos span { width: 18px; height: 18px; border-radius: 50%; background: var(--luz); }
+.home-puntos span:nth-child(2) { background: var(--agua); }
+.home-puntos span:nth-child(3) { background: var(--gas); }
+.home-pie { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; max-width: 1200px; margin: 0 auto; padding: 22px 32px 30px; border-top: 1px solid var(--home-cierre-borde); color: var(--home-cierre-suave); font-size: 13px; }
+.home-pie p { margin: 0; }
+
+/* Tablet y celular */
+@media (max-width: 900px) {
+  .home-servicios, .home-pasos { grid-template-columns: 1fr; }
+  .home-paso { padding-right: 0; padding-bottom: 28px; }
+  .home-hero-logo svg { max-width: 280px; }
+  /* Una franja debajo de la otra: el texto vuelve al centro. */
+  .home-servicios .home-servicio-contenido { max-width: 560px; margin-right: auto; margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .home-header, .home-hero, .home-manifiesto, .home-pasos, .home-cierre-cuerpo, .home-pie { padding-right: 18px; padding-left: 18px; }
+  .home-hero { padding-top: 16px; padding-bottom: 56px; }
+  .home-servicio-contenido { padding: 40px 22px 44px; }
+  .home-titulo-acento { white-space: normal; }
+  .home-manifiesto { padding-top: 64px; padding-bottom: 56px; }
+  .home-cierre-cuerpo { padding-top: 64px; padding-bottom: 64px; }
+}

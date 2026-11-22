@@ -41,10 +41,24 @@ class ExtractorEpe extends ExtractorBoleta
         // "FECHA DE EMISION: 01/06/2026"
         $fecha = $this->buscar('/FECHA\s*DE\s*EMISION:\s*(\d{2}\/\d{2}\/\d{4})/u', $texto);
 
+        // Etapa 23: talones de pago. "Cuota 1 23/06/2026 $*50.728,03" (en el PDF guardado desde el
+        // navegador sale pegado: "Cuota114/08/2026$*21.131,50"). Es el primer vencimiento, sin recargo;
+        // el "Vencimiento con Recargo" tiene otro formato y no coincide con esta expresión.
+        preg_match_all('/Cuota\s*([12])\s*(\d{2}\/\d{2}\/\d{4})\s*\$[*\s]*([\d.]+,\d{2})/u', $texto, $talones, PREG_SET_ORDER);
+        $pares = [];
+        foreach ($talones as $talon) {
+            $pares[(int) $talon[1]] ??= [$talon[2], $talon[3]];
+        }
+        ksort($pares);
+        if (!isset($pares[1])) {
+            $pares = []; // sin la cuota 1 no se precarga nada (no se puede guardar una cuota 2 sola)
+        }
+
         return [
             'cantidad' => $this->numeroArgentino($cantidad),
             'importe' => $this->numeroArgentino($importe),
             'fecha' => $this->fechaArgentina($fecha),
+            'vencimientos' => $this->cuotas($pares),
         ];
     }
 }

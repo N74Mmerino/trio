@@ -42,7 +42,10 @@ class ExtractorLitoralGas extends ExtractorBoleta
         $cantidad = $this->buscar('/m3\s*asignados\s*a\s*la\s*presente\s*(\d+(?:\.\d+)?)/u', $texto);
 
         // Talón: "0081-61860832 23/09/2026 35.284,49" (número, vencimiento, importe)
-        $importe = $this->buscar('/^\d{4}-\d{8}\s+\d{2}\/\d{2}\/\d{4}\s+([\d.]+,\d{2})\s*$/mu', $texto);
+        $talon = '/^\d{4}-\d{8}\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.]+,\d{2})\s*$/mu';
+        $importe = preg_match($talon, $texto, $t) === 1 ? $t[2] : '';
+        // Etapa 23: la factura tiene un único vencimiento, el del talón (lo confirma "TOTAL A PAGAR hasta el ...").
+        $vencimiento = $importe !== '' ? $t[1] : '';
 
         // La etiqueta "FECHA DE EMISION:" sale separada del valor; la fecha va en la línea
         // siguiente al número de comprobante: "0081-61860832" / "03/09/2026"
@@ -52,6 +55,7 @@ class ExtractorLitoralGas extends ExtractorBoleta
             'cantidad' => $cantidad,
             'importe' => $this->numeroArgentino($importe),
             'fecha' => $this->fechaArgentina($fecha),
+            'vencimientos' => $vencimiento !== '' ? $this->cuotas([[$vencimiento, $importe]]) : [],
         ];
     }
 }

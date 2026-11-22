@@ -62,4 +62,24 @@ class DataBase
     {
         return (int) self::conexion()->lastInsertId();
     }
+
+    // Etapa 23: transacciones. Se usan cuando una operación escribe en más de una tabla
+    // (una boleta y sus cuotas): o se guarda todo, o no se guarda nada.
+
+    public static function iniciarTransaccion(): void
+    {
+        self::conexion()->beginTransaction();
+    }
+
+    public static function confirmarTransaccion(): void
+    {
+        self::conexion()->commit();
+    }
+
+    public static function revertirTransaccion(): void
+    {
+        if (self::conexion()->inTransaction()) {
+            self::conexion()->rollBack();
+        }
+    }
 }

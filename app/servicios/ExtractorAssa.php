@@ -43,10 +43,17 @@ class ExtractorAssa extends ExtractorBoleta
         // (los de las cuotas están en los talones, más abajo)
         $importe = $this->buscar('/^\$[*\s]*([\d.]+,\d{2})\s*\n\s*ULTIMOS\s*6\s*PERIODOS/mu', $texto);
 
+        // Etapa 23: talones de las 2 cuotas. Como el resto de la boleta, las etiquetas están dibujadas:
+        // cada talón trae "11/11/2026" / "$***41.201,16" / "PAGO HASTA EL" (este último encabeza el
+        // 2º vencimiento, con recargo, que no se guarda). Los talones aparecen en orden: cuota 1 y cuota 2.
+        preg_match_all('/^(\d{2}\/\d{2}\/\d{4})\s*\n\s*\$[*\s]*([\d.]+,\d{2})\s*\n\s*PAGO\s*HASTA\s*EL/mu', $texto, $talones, PREG_SET_ORDER);
+        $pares = array_map(fn ($talon) => [$talon[1], $talon[2]], array_slice($talones, 0, 2));
+
         return [
             'cantidad' => $this->numeroArgentino($cantidad),
             'importe' => $this->numeroArgentino($importe),
             'fecha' => $this->fechaArgentina($fecha),
+            'vencimientos' => $this->cuotas($pares),
         ];
     }
 }

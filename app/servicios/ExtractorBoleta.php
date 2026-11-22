@@ -26,8 +26,34 @@ abstract class ExtractorBoleta
      * Devuelve cantidad, importe y fecha en el formato que usa el formulario:
      * cantidad e importe con punto decimal, fecha como AAAA-MM-DD.
      * Un dato que no se encuentra se devuelve como cadena vacía.
+     *
+     * Etapa 23: también 'vencimientos', la lista de cuotas en orden, cada una con
+     * 'fecha' (AAAA-MM-DD) e 'importe' (punto decimal). Lista vacía si no se encuentran.
      */
     abstract public function extraer(string $texto): array;
+
+    /**
+     * Etapa 23: arma la lista de cuotas a partir de pares [fecha dd/mm/aaaa, importe "50.728,03"].
+     * Si alguna cuota no se puede convertir, devuelve la lista vacía: es preferible no precargar
+     * nada a precargar una cuota incompleta (el usuario puede completarlas a mano en el paso 2).
+     */
+    protected function cuotas(array $pares): array
+    {
+        $cuotas = [];
+
+        foreach ($pares as [$fecha, $importe]) {
+            $fecha = $this->fechaArgentina($fecha);
+            $importe = $this->numeroArgentino($importe);
+
+            if ($fecha === '' || $importe === '') {
+                return [];
+            }
+
+            $cuotas[] = ['fecha' => $fecha, 'importe' => $importe];
+        }
+
+        return $cuotas;
+    }
 
     /** Devuelve el primer grupo capturado por la expresión, o '' si no hay coincidencia. */
     protected function buscar(string $patron, string $texto): string

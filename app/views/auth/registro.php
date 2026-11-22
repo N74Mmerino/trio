@@ -7,9 +7,10 @@
     <div class="theme-corner"><?php require APP_PATH . 'views/layouts/boton-tema.php'; ?></div>
     <main class="auth-shell">
         <section class="auth-card" aria-labelledby="register-title">
-            <div class="energy-icon" aria-hidden="true">
+            <?php // Etapa 24: el logo vuelve al home público. ?>
+            <a class="energy-icon" href="<?= BASE_URL ?>" aria-label="Volver al inicio">
                 <?php require APP_PATH . 'views/layouts/logo.php'; ?>
-            </div>
+            </a>
             <h1 id="register-title">Crear una cuenta</h1>
             <p class="auth-intro">Registrate para empezar a monitorear tu consumo energético</p>
 
